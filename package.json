@@ -1,1 +1,22 @@
-
+{
+  "name": "solana-trading-bot",
+  "version": "1.0.0",
+  "description": "Raydium memecoin trading bot with 0.1s monitoring",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "bot": "node bot.js",
+    "dev": "node server.js & node bot.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "node-fetch": "^2.7.0",
+    "ws": "^8.14.2"
+  },
+  "author": "Amir Collider",
+  "license": "MIT"
+}
