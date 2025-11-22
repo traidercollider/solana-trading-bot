@@ -1,4 +1,4 @@
-// Express API Server برای نمایش داده‌ها
+// Express API Server with FULL CORS
 const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
@@ -7,15 +7,24 @@ const { spawn } = require('child_process');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
-app.use(cors());
+// CORS کامل - همه درخواست‌ها مجاز
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Secret'],
+  credentials: true
+}));
+
+// Pre-flight برای OPTIONS
+app.options('*', cors());
+
 app.use(express.json());
 
 // راه‌اندازی ربات
 let botProcess = null;
 function startBot() {
   if (botProcess) {
-    console.log('⚠️  ربات قبلاً در حال اجراست');
+    console.log('⚠️ ربات قبلاً در حال اجراست');
     return;
   }
   
@@ -25,14 +34,13 @@ function startBot() {
   });
   
   botProcess.on('error', (err) => {
-    console.error('❌ خطا در اجرای ربات:', err);
+    console.error('❌ خطای ربات:', err);
     botProcess = null;
   });
   
   botProcess.on('exit', (code) => {
-    console.log(`⚠️  ربات متوقف شد با کد: ${code}`);
+    console.log(`⚠️ ربات متوقف شد: ${code}`);
     botProcess = null;
-    // راه‌اندازی مجدد بعد از 5 ثانیه
     setTimeout(startBot, 5000);
   });
 }
@@ -41,10 +49,12 @@ function startBot() {
 function readTradingData() {
   try {
     if (fs.existsSync('trading_data.json')) {
-      return JSON.parse(fs.readFileSync('trading_data.json', 'utf8'));
+      const data = JSON.parse(fs.readFileSync('trading_data.json', 'utf8'));
+      console.log(`📊 Data loaded: ${data.trades?.length || 0} trades, ${data.activePositions?.length || 0} positions`);
+      return data;
     }
   } catch (err) {
-    console.error('خطا در خواندن داده‌ها:', err.message);
+    console.error('خطا در خواندن:', err.message);
   }
   return {
     trades: [],
@@ -61,80 +71,107 @@ function readTradingData() {
   };
 }
 
+// Middleware برای لاگ
+app.use((req, res, next) => {
+  console.log(`📡 ${req.method} ${req.path} - Origin: ${req.headers.origin || 'none'}`);
+  next();
+});
+
 // API Endpoints
 
-// وضعیت کلی
 app.get('/api/stats', (req, res) => {
-  const data = readTradingData();
-  const runningTime = Date.now() - data.stats.startTime;
-  
-  res.json({
-    status: 'active',
-    stats: {
-      ...data.stats,
-      runningTime,
-      winRate: data.stats.totalTrades > 0 
-        ? (data.stats.wins / data.stats.totalTrades * 100).toFixed(1) 
-        : 0,
-      roi: ((data.stats.capital - 10) / 10 * 100).toFixed(2),
-    },
-    activePositions: data.activePositions.length,
-    totalTrades: data.trades.length,
-    lastUpdate: data.lastUpdate,
-  });
+  try {
+    const data = readTradingData();
+    const runningTime = Date.now() - (data.stats.startTime || Date.now());
+    
+    const response = {
+      status: 'active',
+      stats: {
+        ...data.stats,
+        runningTime,
+        winRate: data.stats.totalTrades > 0 
+          ? (data.stats.wins / data.stats.totalTrades * 100).toFixed(1) 
+          : '0',
+        roi: ((data.stats.capital - 10) / 10 * 100).toFixed(2),
+      },
+      activePositions: data.activePositions.length,
+      totalTrades: data.trades.length,
+      lastUpdate: data.lastUpdate,
+    };
+    
+    console.log('✅ Stats sent:', JSON.stringify(response).substring(0, 100));
+    
+    res.json(response);
+  } catch (err) {
+    console.error('❌ Stats error:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// لیست معاملات
 app.get('/api/trades', (req, res) => {
-  const data = readTradingData();
-  res.json({
-    trades: data.trades.slice(-100), // آخرین 100 معامله
-    total: data.trades.length,
-  });
+  try {
+    const data = readTradingData();
+    res.json({
+      trades: data.trades.slice(-100),
+      total: data.trades.length,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// معاملات گروه‌بندی شده به ساعت
 app.get('/api/trades/hourly', (req, res) => {
-  const data = readTradingData();
-  const hourlyData = {};
-  
-  data.trades.forEach(trade => {
-    const date = new Date(trade.buyTime);
-    const hour = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:00`;
+  try {
+    const data = readTradingData();
+    const hourlyData = {};
     
-    if (!hourlyData[hour]) {
-      hourlyData[hour] = {
-        hour,
-        trades: [],
-        totalProfit: 0,
-        wins: 0,
-        losses: 0,
-      };
-    }
+    data.trades.forEach(trade => {
+      const date = new Date(trade.buyTime);
+      const hour = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:00`;
+      
+      if (!hourlyData[hour]) {
+        hourlyData[hour] = {
+          hour,
+          trades: [],
+          totalProfit: 0,
+          wins: 0,
+          losses: 0,
+        };
+      }
+      
+      hourlyData[hour].trades.push(trade);
+      hourlyData[hour].totalProfit += trade.profit || 0;
+      if (trade.status === 'win') hourlyData[hour].wins++;
+      else hourlyData[hour].losses++;
+    });
     
-    hourlyData[hour].trades.push(trade);
-    hourlyData[hour].totalProfit += trade.profit;
-    if (trade.status === 'win') hourlyData[hour].wins++;
-    else hourlyData[hour].losses++;
-  });
-  
-  res.json({
-    hourly: Object.values(hourlyData).sort((a, b) => 
-      new Date(b.hour) - new Date(a.hour)
-    ),
-  });
+    const response = {
+      hourly: Object.values(hourlyData).sort((a, b) => 
+        new Date(b.hour) - new Date(a.hour)
+      ),
+    };
+    
+    console.log('✅ Hourly sent:', response.hourly.length, 'hours');
+    
+    res.json(response);
+  } catch (err) {
+    console.error('❌ Hourly error:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// پوزیشن‌های فعال
 app.get('/api/positions', (req, res) => {
-  const data = readTradingData();
-  res.json({
-    positions: data.activePositions,
-    count: data.activePositions.length,
-  });
+  try {
+    const data = readTradingData();
+    res.json({
+      positions: data.activePositions,
+      count: data.activePositions.length,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// ریست کردن داده‌ها (فقط برای تست)
 app.post('/api/reset', (req, res) => {
   const secret = req.headers['x-api-secret'];
   if (secret !== process.env.VPS_API_SECRET) {
@@ -156,56 +193,72 @@ app.post('/api/reset', (req, res) => {
   };
   
   fs.writeFileSync('trading_data.json', JSON.stringify(initialData, null, 2));
-  res.json({ message: 'داده‌ها ریست شدند' });
+  res.json({ message: 'ریست شد' });
 });
 
-// Health check
 app.get('/health', (req, res) => {
+  const data = readTradingData();
   res.json({ 
     status: 'ok',
     timestamp: new Date().toISOString(),
     botRunning: botProcess !== null,
+    trades: data.trades.length,
+    activePositions: data.activePositions.length,
+    capital: data.stats.capital,
   });
 });
 
-// صفحه اصلی
 app.get('/', (req, res) => {
+  const data = readTradingData();
   res.json({
     message: 'Solana Trading Bot API',
-    version: '1.0.0',
+    version: '2.0.0',
+    status: 'running',
+    stats: {
+      trades: data.trades.length,
+      activePositions: data.activePositions.length,
+      capital: data.stats.capital,
+      totalProfit: data.stats.totalProfit,
+    },
     endpoints: [
-      'GET /api/stats - آمار کلی',
-      'GET /api/trades - لیست معاملات',
-      'GET /api/trades/hourly - معاملات ساعتی',
-      'GET /api/positions - پوزیشن‌های فعال',
-      'GET /health - وضعیت سلامت',
+      'GET /api/stats',
+      'GET /api/trades',
+      'GET /api/trades/hourly',
+      'GET /api/positions',
+      'GET /health',
     ],
   });
 });
 
-// راه‌اندازی سرور
-app.listen(PORT, () => {
-  console.log(`\n✅ سرور API راه‌اندازی شد: http://localhost:${PORT}`);
-  console.log(`📡 Endpoints آماده است`);
-  
-  // راه‌اندازی ربات
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({ error: 'Not Found', path: req.path });
+});
+
+// Error handler
+app.use((err, req, res, next) => {
+  console.error('❌ Server error:', err);
+  res.status(500).json({ error: err.message });
+});
+
+// راه‌اندازی
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`\n✅ سرور API: http://0.0.0.0:${PORT}`);
+  console.log(`📡 CORS enabled for all origins`);
+  console.log(`🚀 Starting bot...\n`);
   startBot();
 });
 
-// مدیریت خطاها
 process.on('uncaughtException', (err) => {
-  console.error('❌ خطای غیرمنتظره:', err);
+  console.error('❌ Uncaught:', err);
 });
 
 process.on('unhandledRejection', (err) => {
-  console.error('❌ Promise Rejection:', err);
+  console.error('❌ Rejection:', err);
 });
 
-// توقف درست هنگام بستن
 process.on('SIGTERM', () => {
-  console.log('⚠️  دریافت سیگنال SIGTERM، توقف درست...');
-  if (botProcess) {
-    botProcess.kill();
-  }
+  console.log('⚠️ SIGTERM received');
+  if (botProcess) botProcess.kill();
   process.exit(0);
 });
