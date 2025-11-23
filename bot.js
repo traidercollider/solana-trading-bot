@@ -1,82 +1,484 @@
-// SOLANA TRADING BOT - INFINITE MODE
-// به‌روزرسانی: نوامبر 2024
-// نسخه: 3.0.0 - بهینه شده برای اجرای بی‌نهایت
+// SOLANA MEMECOIN TRADING BOT - PRODUCTION v4.0
+// Optimized for Memecoins on Solana Blockchain
+// Mode: Simulation (Virtual Trading)
 
 const fs = require('fs');
 const path = require('path');
+const fetch = require('node-fetch');
 
 // =============================================
 // CONFIGURATION
 // =============================================
 
 const CONFIG = {
-  // Capital Settings
-  INITIAL_CAPITAL: 270,           // سرمایه اولیه (دلار)
-  POSITION_SIZE: 10,              // اندازه هر معامله (دلار)
-  MAX_POSITIONS: 10,              // حداکثر پوزیشن همزمان
-  
   // Trading Settings
-  TAKE_PROFIT: 0.50,              // هدف سود (50%)
-  STOP_LOSS: -0.30,               // حد ضرر (-30%)
-  MAX_TOKEN_AGE: 120,             // حداکثر سن توکن (ثانیه)
-  MIN_LIQUIDITY: 50,              // حداقل نقدینگی (دلار)
+  POSITION_SIZE: 10,              // $10 per trade
+  TAKE_PROFIT: 0.50,              // 50% profit target
+  STOP_LOSS: -0.25,               // -25% stop loss
   
-  // Timing Settings
-  CHECK_INTERVAL: 500,            // فاصله چک کردن (0.5 ثانیه)
-  SAVE_INTERVAL: 5000,            // فاصله ذخیره داده (5 ثانیه)
-  REPORT_INTERVAL: 60000,         // فاصله گزارش (1 دقیقه)
+  // Token Discovery (Optimized for Memecoins)
+  MAX_TOKEN_AGE: 2,               // Max 2 seconds old
+  MIN_LIQUIDITY: 50,              // Min $50 liquidity (low for memecoins)
+  CHECK_INTERVAL: 500,            // Check every 0.5 seconds
   
-  // Simulation Settings
-  ENABLE_REAL_TRADING: false,     // فعال‌سازی معاملات واقعی
-  SIMULATE_PRICE_VOLATILITY: true, // شبیه‌سازی نوسانات قیمت
-  MIN_PRICE_CHANGE: -30,          // حداقل تغییر قیمت (%)
-  MAX_PRICE_CHANGE: 100,          // حداکثر تغییر قیمت (%)
+  // Safety Checks
+  ENABLE_SAFETY_CHECK: true,      // Check if token is safe
+  MIN_HOLDERS: 3,                 // Min 3 holders
+  
+  // Fees (Solana)
+  TRANSACTION_FEE: 0.000005,      // ~0.000005 SOL per transaction
+  SWAP_FEE_PERCENT: 0.003,        // 0.3% swap fee
+  
+  // Simulation
+  SIMULATION_MODE: true,
+  SIMULATE_VOLATILITY: true,
+  MIN_PRICE_CHANGE: -35,
+  MAX_PRICE_CHANGE: 200,
+  
+  // Intervals
+  SAVE_INTERVAL: 2000,
+  REPORT_INTERVAL: 30000,
+  PRICE_UPDATE_INTERVAL: 800,
+  STATS_UPDATE_INTERVAL: 1000,
 };
 
 // =============================================
 // GLOBAL STATE
 // =============================================
 
-let trades = [];
-let activePositions = [];
-let stats = {
-  totalTrades: 0,
-  wins: 0,
-  losses: 0,
-  totalProfit: 0,
-  capital: CONFIG.INITIAL_CAPITAL,
-  startTime: Date.now(),
-  scannedTokens: 0,
-  lastSaveTime: Date.now(),
-  lastReportTime: Date.now(),
+let state = {
+  trades: [],
+  activePositions: [],
+  recentScans: [],
+  stats: {
+    totalTrades: 0,
+    wins: 0,
+    losses: 0,
+    totalProfit: 0,
+    totalFees: 0,
+    netProfit: 0,
+    capital: 1000,
+    initialCapital: 1000,
+    startTime: Date.now(),
+    scannedTokens: 0,
+    rejectedTokens: 0,
+    lastSaveTime: Date.now(),
+    lastReportTime: Date.now(),
+    avgTradeTime: 0,
+    bestTrade: null,
+    worstTrade: null,
+  },
+  performance: {
+    hourlyStats: [],
+    last24h: { trades: 0, profit: 0, wins: 0 },
+  },
+  scanCount: 0,
+  shouldSave: false,
 };
 
-let scanCount = 0;
-let shouldSave = false;
+// =============================================
+// SOLANA TOKEN DISCOVERY
+// =============================================
+
+async function discoverNewTokens() {
+  try {
+    state.scanCount++;
+    
+    if (CONFIG.SIMULATION_MODE) {
+      return simulateNewTokens();
+    }
+    
+    // Production: Real Solana API calls
+    const tokens = [];
+    
+    // Raydium DEX - Main source for new tokens
+    try {
+      const raydiumTokens = await fetchRaydiumTokens();
+      tokens.push(...raydiumTokens);
+    } catch (err) {
+      console.error('⚠️  Raydium API error:', err.message);
+    }
+    
+    // DexScreener - Secondary source
+    try {
+      const dexTokens = await fetchDexScreenerTokens();
+      tokens.push(...dexTokens);
+    } catch (err) {
+      console.error('⚠️  DexScreener API error:', err.message);
+    }
+    
+    return filterNewTokens(tokens);
+    
+  } catch (err) {
+    console.error('❌ Token discovery error:', err.message);
+    return [];
+  }
+}
+
+function simulateNewTokens() {
+  const shouldFind = Math.random() > 0.65; // 35% chance
+  if (!shouldFind) return [];
+  
+  const numTokens = Math.floor(Math.random() * 2) + 1; // 1-2 tokens
+  const tokens = [];
+  
+  for (let i = 0; i < numTokens; i++) {
+    const tokenId = Math.floor(Math.random() * 999999);
+    const createdAt = Date.now() - (Math.random() * 1500); // 0-1.5 seconds ago
+    
+    const token = {
+      address: `${generateSolanaAddress()}`,
+      symbol: generateMemecoinSymbol(),
+      name: generateMemecoinName(),
+      pairAddress: `pair_${generateSolanaAddress()}`,
+      price: Math.random() * 0.0001,
+      liquidity: 50 + (Math.random() * 2000),
+      holders: Math.floor(Math.random() * 50) + 3,
+      age: (Date.now() - createdAt) / 1000,
+      createdAt: createdAt,
+      volume24h: Math.random() * 10000,
+      priceChange24h: (Math.random() - 0.5) * 100,
+      isSafe: Math.random() > 0.1, // 90% safe
+      canSell: Math.random() > 0.05, // 95% sellable
+      image: generateTokenImage(),
+    };
+    
+    tokens.push(token);
+  }
+  
+  state.stats.scannedTokens += tokens.length;
+  
+  // Add to recent scans
+  state.recentScans.unshift({
+    timestamp: Date.now(),
+    found: tokens.length,
+    symbols: tokens.map(t => t.symbol),
+  });
+  
+  if (state.recentScans.length > 100) {
+    state.recentScans = state.recentScans.slice(0, 100);
+  }
+  
+  return tokens;
+}
+
+function generateSolanaAddress() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz123456789';
+  let addr = '';
+  for (let i = 0; i < 44; i++) {
+    addr += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return addr;
+}
+
+function generateMemecoinSymbol() {
+  const prefixes = ['PEPE', 'DOGE', 'SHIB', 'FLOKI', 'BONK', 'WIF', 'MEME', 'APE', 'WOJAK', 'CHAD'];
+  const suffixes = ['', 'INU', 'COIN', 'AI', '2.0', 'X', 'PRO', 'MOON'];
+  return prefixes[Math.floor(Math.random() * prefixes.length)] + 
+         suffixes[Math.floor(Math.random() * suffixes.length)];
+}
+
+function generateMemecoinName() {
+  const names = [
+    'Moon Dog', 'Pepe Inu', 'Shiba King', 'Floki Warrior',
+    'Bonk Master', 'Doge Moon', 'Wojak Coin', 'Chad Token',
+    'Ape Strong', 'Rocket Shib', 'Diamond Pepe', 'Lambo Doge'
+  ];
+  return names[Math.floor(Math.random() * names.length)];
+}
+
+function generateTokenImage() {
+  const images = [
+    'https://cdn-icons-png.flaticon.com/512/2504/2504929.png',
+    'https://cdn-icons-png.flaticon.com/512/2504/2504930.png',
+    'https://cdn-icons-png.flaticon.com/512/2504/2504918.png',
+    'https://cdn-icons-png.flaticon.com/512/2504/2504739.png',
+  ];
+  return images[Math.floor(Math.random() * images.length)];
+}
 
 // =============================================
-// FILE OPERATIONS
+// TOKEN FILTERING & SAFETY CHECKS
+// =============================================
+
+function filterNewTokens(tokens) {
+  return tokens.filter(token => {
+    // Check age
+    if (token.age > CONFIG.MAX_TOKEN_AGE) {
+      state.stats.rejectedTokens++;
+      return false;
+    }
+    
+    // Check liquidity
+    if (token.liquidity < CONFIG.MIN_LIQUIDITY) {
+      state.stats.rejectedTokens++;
+      return false;
+    }
+    
+    // Check if already bought
+    if (state.activePositions.some(p => p.address === token.address)) {
+      return false;
+    }
+    
+    // Safety checks
+    if (CONFIG.ENABLE_SAFETY_CHECK) {
+      if (!token.isSafe || !token.canSell) {
+        state.stats.rejectedTokens++;
+        return false;
+      }
+      
+      if (token.holders < CONFIG.MIN_HOLDERS) {
+        state.stats.rejectedTokens++;
+        return false;
+      }
+    }
+    
+    return true;
+  });
+}
+
+// =============================================
+// TRADING LOGIC
+// =============================================
+
+async function buyToken(token) {
+  try {
+    // Calculate fees
+    const swapFee = CONFIG.POSITION_SIZE * CONFIG.SWAP_FEE_PERCENT;
+    const totalCost = CONFIG.POSITION_SIZE + swapFee;
+    
+    if (state.stats.capital < totalCost) {
+      console.log(`⚠️  Insufficient capital: $${state.stats.capital.toFixed(2)}`);
+      return null;
+    }
+    
+    const position = {
+      id: `pos_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      address: token.address,
+      pairAddress: token.pairAddress,
+      symbol: token.symbol,
+      name: token.name,
+      image: token.image,
+      buyPrice: token.price,
+      currentPrice: token.price,
+      quantity: CONFIG.POSITION_SIZE / token.price,
+      investedAmount: CONFIG.POSITION_SIZE,
+      fees: swapFee,
+      buyTime: Date.now(),
+      liquidity: token.liquidity,
+      holders: token.holders,
+      checkCount: 0,
+      maxProfit: 0,
+      minProfit: 0,
+      maxPrice: token.price,
+      minPrice: token.price,
+    };
+    
+    state.activePositions.push(position);
+    state.stats.capital -= totalCost;
+    state.stats.totalFees += swapFee;
+    
+    console.log(`\n${'═'.repeat(80)}`);
+    console.log(`🟢 BUY SIGNAL - NEW MEMECOIN DETECTED`);
+    console.log(`${'═'.repeat(80)}`);
+    console.log(`   Token: ${position.symbol} (${position.name})`);
+    console.log(`   Address: ${position.address.substring(0, 20)}...`);
+    console.log(`   💰 Price: $${position.buyPrice.toFixed(10)}`);
+    console.log(`   📊 Amount: $${CONFIG.POSITION_SIZE} + $${swapFee.toFixed(3)} fee`);
+    console.log(`   💧 Liquidity: $${token.liquidity.toFixed(0)}`);
+    console.log(`   👥 Holders: ${token.holders}`);
+    console.log(`   💵 Remaining Capital: $${state.stats.capital.toFixed(2)}`);
+    console.log(`   📦 Active Positions: ${state.activePositions.length}`);
+    console.log(`${'═'.repeat(80)}\n`);
+    
+    state.shouldSave = true;
+    return position;
+    
+  } catch (err) {
+    console.error('❌ Buy error:', err.message);
+    return null;
+  }
+}
+
+async function updatePositionPrices() {
+  if (state.activePositions.length === 0) return;
+  
+  for (const pos of state.activePositions) {
+    pos.checkCount++;
+    
+    // Simulate price volatility
+    if (CONFIG.SIMULATE_VOLATILITY) {
+      const priceChange = 
+        CONFIG.MIN_PRICE_CHANGE + 
+        (Math.random() * (CONFIG.MAX_PRICE_CHANGE - CONFIG.MIN_PRICE_CHANGE));
+      
+      pos.currentPrice = pos.buyPrice * (1 + priceChange / 100);
+    }
+    
+    // Track price extremes
+    if (pos.currentPrice > pos.maxPrice) pos.maxPrice = pos.currentPrice;
+    if (pos.currentPrice < pos.minPrice) pos.minPrice = pos.currentPrice;
+    
+    // Calculate profit
+    const currentValue = pos.quantity * pos.currentPrice;
+    const profit = currentValue - pos.investedAmount - pos.fees;
+    const profitPercent = (profit / (pos.investedAmount + pos.fees)) * 100;
+    
+    pos.profit = profit;
+    pos.profitPercent = profitPercent;
+    
+    if (profitPercent > pos.maxProfit) pos.maxProfit = profitPercent;
+    if (profitPercent < pos.minProfit) pos.minProfit = profitPercent;
+  }
+}
+
+async function checkSellSignals() {
+  if (state.activePositions.length === 0) return;
+  
+  for (let i = state.activePositions.length - 1; i >= 0; i--) {
+    const pos = state.activePositions[i];
+    
+    let shouldSell = false;
+    let sellReason = '';
+    
+    // Take profit
+    if (pos.profitPercent >= CONFIG.TAKE_PROFIT * 100) {
+      shouldSell = true;
+      sellReason = `🎯 TAKE PROFIT: ${pos.profitPercent.toFixed(2)}%`;
+    }
+    // Stop loss
+    else if (pos.profitPercent <= CONFIG.STOP_LOSS * 100) {
+      shouldSell = true;
+      sellReason = `🛑 STOP LOSS: ${pos.profitPercent.toFixed(2)}%`;
+    }
+    
+    if (shouldSell) {
+      await sellPosition(pos, sellReason, i);
+    }
+  }
+}
+
+async function sellPosition(position, reason, index) {
+  try {
+    const sellFee = (position.quantity * position.currentPrice) * CONFIG.SWAP_FEE_PERCENT;
+    const grossProfit = (position.quantity * position.currentPrice) - position.investedAmount;
+    const netProfit = grossProfit - position.fees - sellFee;
+    const duration = (Date.now() - position.buyTime) / 1000;
+    
+    const trade = {
+      id: position.id,
+      address: position.address,
+      symbol: position.symbol,
+      name: position.name,
+      image: position.image,
+      buyPrice: position.buyPrice,
+      sellPrice: position.currentPrice,
+      quantity: position.quantity,
+      investedAmount: position.investedAmount,
+      buyTime: position.buyTime,
+      sellTime: Date.now(),
+      duration: duration,
+      grossProfit: grossProfit,
+      netProfit: netProfit,
+      profitPercent: (netProfit / position.investedAmount) * 100,
+      fees: position.fees + sellFee,
+      status: netProfit > 0 ? 'win' : 'loss',
+      reason: reason,
+      checkCount: position.checkCount,
+      maxProfit: position.maxProfit,
+      minProfit: position.minProfit,
+      maxPrice: position.maxPrice,
+      minPrice: position.minPrice,
+    };
+    
+    // Update stats
+    state.trades.push(trade);
+    state.stats.totalTrades++;
+    state.stats.totalFees += sellFee;
+    state.stats.totalProfit += grossProfit;
+    state.stats.netProfit += netProfit;
+    state.stats.capital += (position.quantity * position.currentPrice) - sellFee;
+    
+    if (netProfit > 0) {
+      state.stats.wins++;
+    } else {
+      state.stats.losses++;
+    }
+    
+    // Track best/worst trades
+    if (!state.stats.bestTrade || netProfit > state.stats.bestTrade.netProfit) {
+      state.stats.bestTrade = trade;
+    }
+    if (!state.stats.worstTrade || netProfit < state.stats.worstTrade.netProfit) {
+      state.stats.worstTrade = trade;
+    }
+    
+    // Calculate average trade time
+    const totalTime = state.trades.reduce((sum, t) => sum + t.duration, 0);
+    state.stats.avgTradeTime = totalTime / state.trades.length;
+    
+    // Log trade
+    console.log(`\n${'═'.repeat(80)}`);
+    console.log(`${netProfit > 0 ? '✅ PROFITABLE TRADE' : '❌ LOSS TRADE'}: ${position.symbol}`);
+    console.log(`${'═'.repeat(80)}`);
+    console.log(`   ${reason}`);
+    console.log(`   💰 Buy: $${position.buyPrice.toFixed(10)} → Sell: $${position.currentPrice.toFixed(10)}`);
+    console.log(`   📊 Gross P/L: $${grossProfit.toFixed(2)} (${trade.profitPercent.toFixed(2)}%)`);
+    console.log(`   💸 Fees: $${trade.fees.toFixed(3)}`);
+    console.log(`   💵 Net P/L: $${netProfit.toFixed(2)}`);
+    console.log(`   ⏱️  Duration: ${duration.toFixed(1)}s | Checks: ${position.checkCount}`);
+    console.log(`   📈 Max: +${position.maxProfit.toFixed(1)}% ($${position.maxPrice.toFixed(10)})`);
+    console.log(`   📉 Min: ${position.minProfit.toFixed(1)}% ($${position.minPrice.toFixed(10)})`);
+    console.log(`   💰 New Capital: $${state.stats.capital.toFixed(2)}`);
+    console.log(`${'═'.repeat(80)}\n`);
+    
+    // Remove position
+    state.activePositions.splice(index, 1);
+    state.shouldSave = true;
+    
+  } catch (err) {
+    console.error('❌ Sell error:', err.message);
+  }
+}
+
+// =============================================
+// DATA PERSISTENCE
 // =============================================
 
 function saveData() {
   try {
     const data = {
-      trades: trades.slice(-1000), // آخرین 1000 معامله
-      activePositions,
-      stats,
+      trades: state.trades.slice(-500),
+      activePositions: state.activePositions.map(p => ({
+        ...p,
+        age: ((Date.now() - p.buyTime) / 1000).toFixed(1),
+      })),
+      stats: {
+        ...state.stats,
+        roi: (((state.stats.capital - state.stats.initialCapital) / state.stats.initialCapital) * 100).toFixed(2),
+        winRate: state.stats.totalTrades > 0 
+          ? ((state.stats.wins / state.stats.totalTrades) * 100).toFixed(1)
+          : 0,
+        avgProfitPerTrade: state.stats.totalTrades > 0
+          ? (state.stats.netProfit / state.stats.totalTrades).toFixed(2)
+          : 0,
+        uptime: ((Date.now() - state.stats.startTime) / 1000).toFixed(0),
+      },
+      recentScans: state.recentScans.slice(0, 20),
+      performance: calculatePerformance(),
       lastUpdate: new Date().toISOString(),
-      simulatedData: generateRecentSimulatedData()
+      version: '4.0.0',
     };
     
     const dataPath = path.join(__dirname, 'trading_data.json');
     fs.writeFileSync(dataPath, JSON.stringify(data, null, 2));
     
-    stats.lastSaveTime = Date.now();
-    shouldSave = false;
+    state.stats.lastSaveTime = Date.now();
+    state.shouldSave = false;
     
     return true;
   } catch (err) {
-    console.error('❌ Error saving data:', err.message);
+    console.error('❌ Save error:', err.message);
     return false;
   }
 }
@@ -89,259 +491,62 @@ function loadData() {
       const rawData = fs.readFileSync(dataPath, 'utf8');
       const data = JSON.parse(rawData);
       
-      trades = data.trades || [];
-      activePositions = data.activePositions || [];
-      stats = data.stats || stats;
+      state.trades = data.trades || [];
+      state.activePositions = data.activePositions || [];
+      state.stats = { ...state.stats, ...(data.stats || {}) };
+      state.recentScans = data.recentScans || [];
       
-      console.log(`✅ Loaded: ${trades.length} trades, ${activePositions.length} active positions`);
-      console.log(`💰 Current Capital: $${stats.capital.toFixed(2)}`);
+      console.log(`✅ Data loaded: ${state.trades.length} trades, ${state.activePositions.length} positions`);
+      console.log(`💰 Capital: $${state.stats.capital.toFixed(2)}`);
       return true;
-    } else {
-      console.log('⚠️  No previous data found - starting fresh');
-      return false;
     }
+    
+    console.log('⚠️  No previous data - starting fresh');
+    return false;
   } catch (err) {
-    console.error('❌ Error loading data:', err.message);
+    console.error('❌ Load error:', err.message);
     return false;
   }
 }
 
-// =============================================
-// SIMULATED DATA GENERATION
-// =============================================
-
-function generateRecentSimulatedData() {
-  const hourlyData = [];
-  const now = new Date();
+function calculatePerformance() {
+  const now = Date.now();
+  const oneDayAgo = now - (24 * 60 * 60 * 1000);
   
-  // تولید داده برای آخرین 24 ساعت
-  for (let hoursAgo = 23; hoursAgo >= 0; hoursAgo--) {
-    const hourDate = new Date(now.getTime() - (hoursAgo * 60 * 60 * 1000));
-    const hourTrades = Math.floor(Math.random() * 8) + 2; // 2-10 معامله در ساعت
+  const last24hTrades = state.trades.filter(t => t.sellTime >= oneDayAgo);
+  
+  return {
+    last24h: {
+      trades: last24hTrades.length,
+      profit: last24hTrades.reduce((sum, t) => sum + t.netProfit, 0),
+      wins: last24hTrades.filter(t => t.status === 'win').length,
+      losses: last24hTrades.filter(t => t.status === 'loss').length,
+    },
+    hourly: generateHourlyStats(),
+  };
+}
+
+function generateHourlyStats() {
+  const hourly = [];
+  const now = Date.now();
+  
+  for (let i = 23; i >= 0; i--) {
+    const hourStart = now - (i * 60 * 60 * 1000);
+    const hourEnd = hourStart + (60 * 60 * 1000);
     
-    const hourlyTrades = [];
-    let hourTotalProfit = 0;
-    let hourWins = 0;
-    let hourLosses = 0;
+    const hourTrades = state.trades.filter(t => 
+      t.sellTime >= hourStart && t.sellTime < hourEnd
+    );
     
-    for (let i = 0; i < hourTrades; i++) {
-      const isWin = Math.random() > 0.35; // 65% شانس برد
-      const profitPercent = isWin 
-        ? (Math.random() * 40) + 10    // 10% تا 50% سود
-        : (Math.random() * 25) - 25;   // 0% تا -25% ضرر
-      
-      const profit = (CONFIG.POSITION_SIZE * profitPercent) / 100;
-      
-      hourlyTrades.push({
-        symbol: `MEME${Math.floor(Math.random() * 10000)}`,
-        token: `Token${Math.floor(Math.random() * 100000)}`,
-        buyPrice: Math.random() * 0.01,
-        sellPrice: Math.random() * 0.01 * (1 + profitPercent/100),
-        profit: profit,
-        profitPercent: profitPercent,
-        reason: isWin ? '🎯 TARGET HIT' : '🛑 STOP LOSS'
-      });
-      
-      hourTotalProfit += profit;
-      if (isWin) hourWins++;
-      else hourLosses++;
-    }
-    
-    hourlyData.push({
-      hour: hourDate.toLocaleString('fa-IR', { 
-        weekday: 'long',
-        month: 'long', 
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      }),
-      trades: hourlyTrades,
-      totalProfit: hourTotalProfit,
-      wins: hourWins,
-      losses: hourLosses
+    hourly.push({
+      hour: new Date(hourStart).toISOString(),
+      trades: hourTrades.length,
+      profit: hourTrades.reduce((sum, t) => sum + t.netProfit, 0),
+      wins: hourTrades.filter(t => t.status === 'win').length,
     });
   }
   
-  return { hourly: hourlyData };
-}
-
-// =============================================
-// TOKEN DISCOVERY
-// =============================================
-
-async function getNewTokens() {
-  // در حالت واقعی، اینجا از API واقعی استفاده می‌شود
-  // برای مثال: Raydium API, Jupiter API, DexScreener API
-  
-  if (CONFIG.ENABLE_REAL_TRADING) {
-    // TODO: Implement real token discovery
-    // const response = await fetch('https://api.raydium.io/v2/main/pairs');
-    // return processRealTokens(response);
-    return [];
-  }
-  
-  // شبیه‌سازی کشف توکن‌های جدید
-  const shouldFindToken = Math.random() > 0.7; // 30% شانس پیدا کردن توکن
-  
-  if (!shouldFindToken) return [];
-  
-  const numTokens = Math.floor(Math.random() * 3) + 1; // 1-3 توکن
-  const tokens = [];
-  
-  for (let i = 0; i < numTokens; i++) {
-    const tokenId = Math.floor(Math.random() * 1000000);
-    const token = {
-      address: `mock_addr_${Date.now()}_${tokenId}`,
-      symbol: `MEME${tokenId}`,
-      name: `MemeToken ${tokenId}`,
-      pairAddress: `pair_addr_${Date.now()}_${tokenId}`,
-      price: Math.random() * 0.001,
-      liquidity: 50 + (Math.random() * 500),
-      age: Math.random() * 200, // 0-200 ثانیه
-      createdAt: new Date().toISOString(),
-    };
-    
-    tokens.push(token);
-  }
-  
-  stats.scannedTokens += tokens.length;
-  return tokens;
-}
-
-// =============================================
-// TRADING LOGIC
-// =============================================
-
-function shouldBuy(token) {
-  // بررسی شرایط خرید
-  const isNew = token.age <= CONFIG.MAX_TOKEN_AGE;
-  const hasLiquidity = token.liquidity >= CONFIG.MIN_LIQUIDITY;
-  const notBought = !activePositions.some(p => p.pairAddress === token.pairAddress);
-  const hasCapital = stats.capital >= CONFIG.POSITION_SIZE;
-  const hasRoom = activePositions.length < CONFIG.MAX_POSITIONS;
-  
-  return isNew && hasLiquidity && notBought && hasCapital && hasRoom;
-}
-
-async function buy(token) {
-  if (stats.capital < CONFIG.POSITION_SIZE) {
-    console.log(`⚠️  Insufficient capital: $${stats.capital.toFixed(2)}`);
-    return null;
-  }
-  
-  const position = {
-    id: `pos_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-    token: token.name,
-    symbol: token.symbol,
-    address: token.address,
-    pairAddress: token.pairAddress,
-    buyPrice: token.price,
-    currentPrice: token.price,
-    quantity: CONFIG.POSITION_SIZE / token.price,
-    investedAmount: CONFIG.POSITION_SIZE,
-    buyTime: new Date().toISOString(),
-    checkCount: 0,
-    maxProfit: 0,
-    minProfit: 0,
-  };
-  
-  activePositions.push(position);
-  stats.capital -= CONFIG.POSITION_SIZE;
-  
-  console.log(`\n${'='.repeat(70)}`);
-  console.log(`🟢 BUY: ${position.symbol}`);
-  console.log(`   Price: ${position.buyPrice.toFixed(8)} | Amount: $${CONFIG.POSITION_SIZE}`);
-  console.log(`   💰 Remaining Capital: $${stats.capital.toFixed(2)}`);
-  console.log(`   📊 Active Positions: ${activePositions.length}/${CONFIG.MAX_POSITIONS}`);
-  console.log(`${'='.repeat(70)}\n`);
-  
-  shouldSave = true;
-  return position;
-}
-
-async function checkSell() {
-  if (activePositions.length === 0) return;
-  
-  for (let i = activePositions.length - 1; i >= 0; i--) {
-    const pos = activePositions[i];
-    pos.checkCount++;
-    
-    // شبیه‌سازی تغییر قیمت
-    if (CONFIG.SIMULATE_PRICE_VOLATILITY) {
-      const priceChangePercent = 
-        CONFIG.MIN_PRICE_CHANGE + 
-        (Math.random() * (CONFIG.MAX_PRICE_CHANGE - CONFIG.MIN_PRICE_CHANGE));
-      
-      pos.currentPrice = pos.buyPrice * (1 + priceChangePercent / 100);
-    }
-    
-    // محاسبه سود/ضرر
-    const currentValue = pos.quantity * pos.currentPrice;
-    const profit = currentValue - pos.investedAmount;
-    const profitPercent = (profit / pos.investedAmount) * 100;
-    
-    // به‌روزرسانی رکوردها
-    if (profitPercent > pos.maxProfit) pos.maxProfit = profitPercent;
-    if (profitPercent < pos.minProfit) pos.minProfit = profitPercent;
-    
-    let shouldSell = false;
-    let sellReason = '';
-    
-    // بررسی شرایط فروش
-    if (profitPercent >= CONFIG.TAKE_PROFIT * 100) {
-      shouldSell = true;
-      sellReason = `🎯 TAKE PROFIT: ${profitPercent.toFixed(1)}%`;
-    } else if (profitPercent <= CONFIG.STOP_LOSS * 100) {
-      shouldSell = true;
-      sellReason = `🛑 STOP LOSS: ${profitPercent.toFixed(1)}%`;
-    }
-    
-    if (shouldSell) {
-      await sell(pos, profit, profitPercent, sellReason, i);
-    }
-  }
-}
-
-async function sell(position, profit, profitPercent, reason, index) {
-  const duration = (Date.now() - new Date(position.buyTime)) / 1000;
-  
-  const trade = {
-    ...position,
-    sellPrice: position.currentPrice,
-    sellTime: new Date().toISOString(),
-    profit,
-    profitPercent,
-    duration,
-    status: profit > 0 ? 'win' : 'loss',
-    reason,
-  };
-  
-  // به‌روزرسانی آمار
-  trades.push(trade);
-  stats.totalTrades++;
-  stats.totalProfit += profit;
-  stats.capital += position.quantity * position.currentPrice;
-  
-  if (profit > 0) {
-    stats.wins++;
-  } else {
-    stats.losses++;
-  }
-  
-  // لاگ معامله
-  console.log(`\n${'='.repeat(70)}`);
-  console.log(`${profit > 0 ? '✅ WIN' : '❌ LOSS'}: ${position.symbol}`);
-  console.log(`   ${reason}`);
-  console.log(`   Buy: ${position.buyPrice.toFixed(8)} → Sell: ${position.currentPrice.toFixed(8)}`);
-  console.log(`   💰 P/L: $${profit.toFixed(2)} (${profitPercent.toFixed(1)}%)`);
-  console.log(`   ⏱️  Duration: ${duration.toFixed(0)}s | Checks: ${position.checkCount}`);
-  console.log(`   📊 Max: ${position.maxProfit.toFixed(1)}% | Min: ${position.minProfit.toFixed(1)}%`);
-  console.log(`   💵 New Capital: $${stats.capital.toFixed(2)}`);
-  console.log(`${'='.repeat(70)}\n`);
-  
-  // حذف پوزیشن
-  activePositions.splice(index, 1);
-  shouldSave = true;
+  return hourly;
 }
 
 // =============================================
@@ -349,29 +554,33 @@ async function sell(position, profit, profitPercent, reason, index) {
 // =============================================
 
 function printReport() {
-  const uptime = (Date.now() - stats.startTime) / 1000;
+  const uptime = (Date.now() - state.stats.startTime) / 1000;
   const uptimeHours = (uptime / 3600).toFixed(1);
-  const winRate = stats.totalTrades > 0 
-    ? ((stats.wins / stats.totalTrades) * 100).toFixed(1)
+  const winRate = state.stats.totalTrades > 0 
+    ? ((state.stats.wins / state.stats.totalTrades) * 100).toFixed(1)
     : 0;
-  const roi = ((stats.capital - CONFIG.INITIAL_CAPITAL) / CONFIG.INITIAL_CAPITAL * 100).toFixed(2);
-  const avgProfitPerTrade = stats.totalTrades > 0 
-    ? (stats.totalProfit / stats.totalTrades).toFixed(2)
-    : 0;
+  const roi = ((state.stats.capital - state.stats.initialCapital) / state.stats.initialCapital * 100).toFixed(2);
   
-  console.log(`\n${'═'.repeat(70)}`);
-  console.log(`📊 PERFORMANCE REPORT - ${new Date().toLocaleString('fa-IR')}`);
-  console.log(`${'═'.repeat(70)}`);
-  console.log(`💰 Capital: $${stats.capital.toFixed(2)} | ROI: ${roi}%`);
-  console.log(`📈 Total Profit: $${stats.totalProfit.toFixed(2)}`);
-  console.log(`📊 Trades: ${stats.totalTrades} | Wins: ${stats.wins} | Losses: ${stats.losses}`);
-  console.log(`🎯 Win Rate: ${winRate}% | Avg P/L: $${avgProfitPerTrade}`);
-  console.log(`🔍 Scanned Tokens: ${stats.scannedTokens}`);
-  console.log(`📦 Active Positions: ${activePositions.length}/${CONFIG.MAX_POSITIONS}`);
-  console.log(`⏰ Uptime: ${uptimeHours}h | Scans: ${scanCount}`);
-  console.log(`${'═'.repeat(70)}\n`);
+  console.log(`\n${'═'.repeat(80)}`);
+  console.log(`📊 PERFORMANCE REPORT - ${new Date().toLocaleString('en-US')}`);
+  console.log(`${'═'.repeat(80)}`);
+  console.log(`💰 Capital: $${state.stats.capital.toFixed(2)} | Initial: $${state.stats.initialCapital}`);
+  console.log(`📈 ROI: ${roi}% | Net Profit: $${state.stats.netProfit.toFixed(2)}`);
+  console.log(`💸 Total Fees Paid: $${state.stats.totalFees.toFixed(2)}`);
+  console.log(`📊 Trades: ${state.stats.totalTrades} | Wins: ${state.stats.wins} | Losses: ${state.stats.losses}`);
+  console.log(`🎯 Win Rate: ${winRate}% | Avg P/L: $${(state.stats.netProfit / (state.stats.totalTrades || 1)).toFixed(2)}`);
+  console.log(`⏱️  Avg Trade Time: ${state.stats.avgTradeTime.toFixed(1)}s`);
+  console.log(`🔍 Scanned: ${state.stats.scannedTokens} | Rejected: ${state.stats.rejectedTokens}`);
+  console.log(`📦 Active Positions: ${state.activePositions.length}`);
+  console.log(`⏰ Uptime: ${uptimeHours}h | Scans: ${state.scanCount}`);
   
-  stats.lastReportTime = Date.now();
+  if (state.stats.bestTrade) {
+    console.log(`🏆 Best Trade: ${state.stats.bestTrade.symbol} (+$${state.stats.bestTrade.netProfit.toFixed(2)})`);
+  }
+  
+  console.log(`${'═'.repeat(80)}\n`);
+  
+  state.stats.lastReportTime = Date.now();
 }
 
 // =============================================
@@ -380,44 +589,37 @@ function printReport() {
 
 async function mainLoop() {
   try {
-    scanCount++;
+    // Discover new tokens
+    const tokens = await discoverNewTokens();
     
-    // چک کردن پوزیشن‌های فعال
-    if (activePositions.length > 0) {
-      await checkSell();
-    }
-    
-    // جستجوی توکن‌های جدید
-    const canBuyMore = activePositions.length < CONFIG.MAX_POSITIONS;
-    const hasCapital = stats.capital >= CONFIG.POSITION_SIZE;
-    
-    if (canBuyMore && hasCapital) {
-      const tokens = await getNewTokens();
+    if (tokens.length > 0) {
+      console.log(`\n🔍 Found ${tokens.length} new memecoin(s)`);
       
-      if (tokens.length > 0) {
-        for (const token of tokens) {
-          if (shouldBuy(token)) {
-            await buy(token);
-            break; // فقط یک توکن در هر اسکن
-          }
-        }
+      for (const token of tokens) {
+        await buyToken(token);
       }
     }
     
-    // ذخیره داده
-    const timeSinceLastSave = Date.now() - stats.lastSaveTime;
-    if (shouldSave && timeSinceLastSave >= CONFIG.SAVE_INTERVAL) {
+    // Update prices
+    await updatePositionPrices();
+    
+    // Check sell signals
+    await checkSellSignals();
+    
+    // Save data periodically
+    const timeSinceLastSave = Date.now() - state.stats.lastSaveTime;
+    if (state.shouldSave && timeSinceLastSave >= CONFIG.SAVE_INTERVAL) {
       saveData();
     }
     
-    // گزارش دوره‌ای
-    const timeSinceLastReport = Date.now() - stats.lastReportTime;
+    // Print report periodically
+    const timeSinceLastReport = Date.now() - state.stats.lastReportTime;
     if (timeSinceLastReport >= CONFIG.REPORT_INTERVAL) {
       printReport();
     }
     
   } catch (err) {
-    console.error('❌ Error in main loop:', err.message);
+    console.error('❌ Main loop error:', err.message);
   }
 }
 
@@ -426,29 +628,32 @@ async function mainLoop() {
 // =============================================
 
 async function initialize() {
-  console.log('\n' + '═'.repeat(70));
-  console.log('🚀 SOLANA TRADING BOT - INFINITE MODE');
-  console.log('═'.repeat(70));
-  console.log(`💰 Initial Capital: $${CONFIG.INITIAL_CAPITAL}`);
+  console.log('\n' + '═'.repeat(80));
+  console.log('🚀 SOLANA MEMECOIN TRADING BOT v4.0');
+  console.log('═'.repeat(80));
+  console.log(`💰 Initial Capital: $${state.stats.initialCapital}`);
   console.log(`🎯 Take Profit: ${CONFIG.TAKE_PROFIT * 100}% | Stop Loss: ${CONFIG.STOP_LOSS * 100}%`);
-  console.log(`📦 Position Size: $${CONFIG.POSITION_SIZE} | Max Positions: ${CONFIG.MAX_POSITIONS}`);
+  console.log(`📦 Position Size: $${CONFIG.POSITION_SIZE} per trade`);
   console.log(`⏱️  Check Interval: ${CONFIG.CHECK_INTERVAL}ms`);
-  console.log(`🔧 Mode: ${CONFIG.ENABLE_REAL_TRADING ? 'REAL TRADING' : 'SIMULATION'}`);
-  console.log('═'.repeat(70) + '\n');
+  console.log(`💧 Min Liquidity: $${CONFIG.MIN_LIQUIDITY} (Optimized for memecoins)`);
+  console.log(`⏰ Max Token Age: ${CONFIG.MAX_TOKEN_AGE} seconds`);
+  console.log(`🔧 Mode: ${CONFIG.SIMULATION_MODE ? 'SIMULATION' : 'LIVE TRADING'}`);
+  console.log('═'.repeat(80) + '\n');
   
-  // بارگذاری داده‌های قبلی
+  // Load previous data
   loadData();
   
-  // شروع حلقه اصلی
+  // Start loops
   console.log('✅ Bot started successfully!\n');
   
   setInterval(mainLoop, CONFIG.CHECK_INTERVAL);
+  setInterval(() => state.shouldSave = true, CONFIG.SAVE_INTERVAL);
   
-  // ذخیره اولیه
+  // Initial save
   setTimeout(() => {
     saveData();
     printReport();
-  }, 5000);
+  }, 3000);
 }
 
 // =============================================
@@ -457,10 +662,8 @@ async function initialize() {
 
 function shutdown() {
   console.log('\n⚠️  Shutting down bot...');
-  
   saveData();
   printReport();
-  
   console.log('✅ Bot stopped gracefully.\n');
   process.exit(0);
 }
