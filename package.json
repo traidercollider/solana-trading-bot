@@ -1,14 +1,14 @@
 {
-  "name": "solana-trading-bot",
-  "version": "3.0.0",
-  "description": "Automated Memecoin Trading Bot for Solana - Infinite Mode with Professional Dashboard",
+  "name": "solana-memecoin-trading-bot",
+  "version": "4.0.0",
+  "description": "Professional Solana Memecoin Trading Bot with Real-time Analytics",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js & node bot.js",
+    "start": "node bot.js & node server.js",
     "server": "node server.js",
     "bot": "node bot.js",
     "dev": "node server.js & node bot.js",
-    "test": "echo \"No tests specified\" && exit 0"
+    "test": "echo \"Testing...\" && exit 0"
   },
   "keywords": [
     "solana",
@@ -17,7 +17,10 @@
     "cryptocurrency",
     "memecoin",
     "automated-trading",
-    "blockchain"
+    "blockchain",
+    "defi",
+    "raydium",
+    "jupiter"
   ],
   "author": "Amir Collider",
   "license": "MIT",
@@ -28,16 +31,15 @@
   "dependencies": {
     "express": "^4.18.2",
     "cors": "^2.8.5",
-    "node-fetch": "^2.7.0",
-    "ws": "^8.14.2"
+    "node-fetch": "^2.7.0"
   },
   "devDependencies": {},
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-username/solana-trading-bot.git"
+    "url": "https://github.com/amircollider/solana-trading-bot.git"
   },
   "bugs": {
-    "url": "https://github.com/your-username/solana-trading-bot/issues"
+    "url": "https://github.com/amircollider/solana-trading-bot/issues"
   },
-  "homepage": "https://github.com/your-username/solana-trading-bot#readme"
+  "homepage": "https://trading-bot-l4sz.onrender.com"
 }
