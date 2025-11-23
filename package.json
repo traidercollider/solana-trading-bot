@@ -1,9 +1,46 @@
 {
+  "name": "solana-memecoin-trading-bot",
+  "version": "4.0.0",
+  "description": "Professional Solana Memecoin Trading Bot with Real-time Analytics",
+  "main": "start.js",
   "scripts": {
     "start": "node start.js",
     "server": "node server.js",
     "bot": "node bot.js",
     "dev": "node start.js",
-    "test": "echo \"Testing...\" && exit 0"
-  }
+    "test": "echo \"Testing...\" && exit 0",
+    "postinstall": "echo '✅ Dependencies installed successfully'"
+  },
+  "keywords": [
+    "solana",
+    "trading",
+    "bot",
+    "cryptocurrency",
+    "memecoin",
+    "automated-trading",
+    "blockchain",
+    "defi",
+    "raydium",
+    "jupiter"
+  ],
+  "author": "Amir Collider",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "node-fetch": "^2.7.0"
+  },
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/amircollider/solana-trading-bot.git"
+  },
+  "bugs": {
+    "url": "https://github.com/amircollider/solana-trading-bot/issues"
+  },
+  "homepage": "https://trading-bot-l4sz.onrender.com"
 }
