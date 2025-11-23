@@ -1,15 +1,29 @@
 {
   "name": "solana-trading-bot",
-  "version": "1.0.0",
-  "description": "Raydium memecoin trading bot with 0.1s monitoring",
+  "version": "3.0.0",
+  "description": "Automated Memecoin Trading Bot for Solana - Infinite Mode with Professional Dashboard",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "node server.js & node bot.js",
+    "server": "node server.js",
     "bot": "node bot.js",
-    "dev": "node server.js & node bot.js"
+    "dev": "node server.js & node bot.js",
+    "test": "echo \"No tests specified\" && exit 0"
   },
+  "keywords": [
+    "solana",
+    "trading",
+    "bot",
+    "cryptocurrency",
+    "memecoin",
+    "automated-trading",
+    "blockchain"
+  ],
+  "author": "Amir Collider",
+  "license": "MIT",
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
   },
   "dependencies": {
     "express": "^4.18.2",
@@ -17,6 +31,13 @@
     "node-fetch": "^2.7.0",
     "ws": "^8.14.2"
   },
-  "author": "Amir Collider",
-  "license": "MIT"
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/solana-trading-bot.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-username/solana-trading-bot/issues"
+  },
+  "homepage": "https://github.com/your-username/solana-trading-bot#readme"
 }
