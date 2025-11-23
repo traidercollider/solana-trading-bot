@@ -1,10 +1,8 @@
 // SOLANA MEMECOIN TRADING BOT - PRODUCTION v4.0
-// Optimized for Memecoins on Solana Blockchain
-// Mode: Simulation (Virtual Trading)
+// نسخه فعال و پرسرعت - معاملات واقعی فرضی
 
 const fs = require('fs');
 const path = require('path');
-const fetch = require('node-fetch');
 
 // =============================================
 // CONFIGURATION
@@ -16,30 +14,30 @@ const CONFIG = {
   TAKE_PROFIT: 0.50,              // 50% profit target
   STOP_LOSS: -0.25,               // -25% stop loss
   
-  // Token Discovery (Optimized for Memecoins)
-  MAX_TOKEN_AGE: 2,               // Max 2 seconds old
-  MIN_LIQUIDITY: 50,              // Min $50 liquidity (low for memecoins)
-  CHECK_INTERVAL: 500,            // Check every 0.5 seconds
+  // Token Discovery (بسیار فعال‌تر)
+  MAX_TOKEN_AGE: 3,               // Max 3 seconds old
+  MIN_LIQUIDITY: 50,              // Min $50 liquidity
+  CHECK_INTERVAL: 2000,           // هر 2 ثانیه چک کن
   
   // Safety Checks
-  ENABLE_SAFETY_CHECK: true,      // Check if token is safe
-  MIN_HOLDERS: 3,                 // Min 3 holders
+  ENABLE_SAFETY_CHECK: true,
+  MIN_HOLDERS: 3,
   
   // Fees (Solana)
-  TRANSACTION_FEE: 0.000005,      // ~0.000005 SOL per transaction
+  TRANSACTION_FEE: 0.000005,
   SWAP_FEE_PERCENT: 0.003,        // 0.3% swap fee
   
-  // Simulation
+  // Simulation (فعال‌تر)
   SIMULATION_MODE: true,
   SIMULATE_VOLATILITY: true,
+  TOKEN_FIND_CHANCE: 0.70,        // 70% احتمال پیدا کردن توکن
   MIN_PRICE_CHANGE: -35,
   MAX_PRICE_CHANGE: 200,
   
   // Intervals
-  SAVE_INTERVAL: 2000,
-  REPORT_INTERVAL: 30000,
-  PRICE_UPDATE_INTERVAL: 800,
-  STATS_UPDATE_INTERVAL: 1000,
+  SAVE_INTERVAL: 3000,
+  REPORT_INTERVAL: 60000,         // گزارش هر 1 دقیقه
+  PRICE_UPDATE_INTERVAL: 1000,    // بروزرسانی قیمت هر 1 ثانیه
 };
 
 // =============================================
@@ -77,90 +75,8 @@ let state = {
 };
 
 // =============================================
-// SOLANA TOKEN DISCOVERY
+// TOKEN GENERATION
 // =============================================
-
-async function discoverNewTokens() {
-  try {
-    state.scanCount++;
-    
-    if (CONFIG.SIMULATION_MODE) {
-      return simulateNewTokens();
-    }
-    
-    // Production: Real Solana API calls
-    const tokens = [];
-    
-    // Raydium DEX - Main source for new tokens
-    try {
-      const raydiumTokens = await fetchRaydiumTokens();
-      tokens.push(...raydiumTokens);
-    } catch (err) {
-      console.error('⚠️  Raydium API error:', err.message);
-    }
-    
-    // DexScreener - Secondary source
-    try {
-      const dexTokens = await fetchDexScreenerTokens();
-      tokens.push(...dexTokens);
-    } catch (err) {
-      console.error('⚠️  DexScreener API error:', err.message);
-    }
-    
-    return filterNewTokens(tokens);
-    
-  } catch (err) {
-    console.error('❌ Token discovery error:', err.message);
-    return [];
-  }
-}
-
-function simulateNewTokens() {
-  const shouldFind = Math.random() > 0.65; // 35% chance
-  if (!shouldFind) return [];
-  
-  const numTokens = Math.floor(Math.random() * 2) + 1; // 1-2 tokens
-  const tokens = [];
-  
-  for (let i = 0; i < numTokens; i++) {
-    const tokenId = Math.floor(Math.random() * 999999);
-    const createdAt = Date.now() - (Math.random() * 1500); // 0-1.5 seconds ago
-    
-    const token = {
-      address: `${generateSolanaAddress()}`,
-      symbol: generateMemecoinSymbol(),
-      name: generateMemecoinName(),
-      pairAddress: `pair_${generateSolanaAddress()}`,
-      price: Math.random() * 0.0001,
-      liquidity: 50 + (Math.random() * 2000),
-      holders: Math.floor(Math.random() * 50) + 3,
-      age: (Date.now() - createdAt) / 1000,
-      createdAt: createdAt,
-      volume24h: Math.random() * 10000,
-      priceChange24h: (Math.random() - 0.5) * 100,
-      isSafe: Math.random() > 0.1, // 90% safe
-      canSell: Math.random() > 0.05, // 95% sellable
-      image: generateTokenImage(),
-    };
-    
-    tokens.push(token);
-  }
-  
-  state.stats.scannedTokens += tokens.length;
-  
-  // Add to recent scans
-  state.recentScans.unshift({
-    timestamp: Date.now(),
-    found: tokens.length,
-    symbols: tokens.map(t => t.symbol),
-  });
-  
-  if (state.recentScans.length > 100) {
-    state.recentScans = state.recentScans.slice(0, 100);
-  }
-  
-  return tokens;
-}
 
 function generateSolanaAddress() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz123456789';
@@ -172,8 +88,8 @@ function generateSolanaAddress() {
 }
 
 function generateMemecoinSymbol() {
-  const prefixes = ['PEPE', 'DOGE', 'SHIB', 'FLOKI', 'BONK', 'WIF', 'MEME', 'APE', 'WOJAK', 'CHAD'];
-  const suffixes = ['', 'INU', 'COIN', 'AI', '2.0', 'X', 'PRO', 'MOON'];
+  const prefixes = ['PEPE', 'DOGE', 'SHIB', 'FLOKI', 'BONK', 'WIF', 'MEME', 'APE', 'WOJAK', 'CHAD', 'MOON', 'ROCKET'];
+  const suffixes = ['', 'INU', 'COIN', 'AI', '2.0', 'X', 'PRO', 'MOON', 'MAX', 'ULTRA'];
   return prefixes[Math.floor(Math.random() * prefixes.length)] + 
          suffixes[Math.floor(Math.random() * suffixes.length)];
 }
@@ -182,7 +98,8 @@ function generateMemecoinName() {
   const names = [
     'Moon Dog', 'Pepe Inu', 'Shiba King', 'Floki Warrior',
     'Bonk Master', 'Doge Moon', 'Wojak Coin', 'Chad Token',
-    'Ape Strong', 'Rocket Shib', 'Diamond Pepe', 'Lambo Doge'
+    'Ape Strong', 'Rocket Shib', 'Diamond Pepe', 'Lambo Doge',
+    'Space Cat', 'Mega Moon', 'Super Ape', 'Ultra Pepe'
   ];
   return names[Math.floor(Math.random() * names.length)];
 }
@@ -198,8 +115,68 @@ function generateTokenImage() {
 }
 
 // =============================================
-// TOKEN FILTERING & SAFETY CHECKS
+// TOKEN DISCOVERY
 // =============================================
+
+async function discoverNewTokens() {
+  try {
+    state.scanCount++;
+    
+    // احتمال بالاتر برای پیدا کردن توکن
+    const shouldFind = Math.random() < CONFIG.TOKEN_FIND_CHANCE;
+    if (!shouldFind) {
+      console.log(`🔍 Scan #${state.scanCount}: No new tokens found`);
+      return [];
+    }
+    
+    const numTokens = Math.floor(Math.random() * 3) + 1; // 1-3 tokens
+    const tokens = [];
+    
+    for (let i = 0; i < numTokens; i++) {
+      const createdAt = Date.now() - (Math.random() * 2000); // 0-2 seconds ago
+      
+      const token = {
+        address: generateSolanaAddress(),
+        symbol: generateMemecoinSymbol(),
+        name: generateMemecoinName(),
+        pairAddress: `pair_${generateSolanaAddress()}`,
+        price: Math.random() * 0.0001,
+        liquidity: 50 + (Math.random() * 5000),
+        holders: Math.floor(Math.random() * 100) + 3,
+        age: (Date.now() - createdAt) / 1000,
+        createdAt: createdAt,
+        volume24h: Math.random() * 50000,
+        priceChange24h: (Math.random() - 0.5) * 100,
+        isSafe: Math.random() > 0.05, // 95% safe
+        canSell: Math.random() > 0.02, // 98% sellable
+        image: generateTokenImage(),
+      };
+      
+      tokens.push(token);
+    }
+    
+    state.stats.scannedTokens += tokens.length;
+    
+    // Add to recent scans
+    state.recentScans.unshift({
+      timestamp: Date.now(),
+      found: tokens.length,
+      symbols: tokens.map(t => t.symbol),
+    });
+    
+    if (state.recentScans.length > 100) {
+      state.recentScans = state.recentScans.slice(0, 100);
+    }
+    
+    console.log(`✅ Scan #${state.scanCount}: Found ${tokens.length} new token(s) - ${tokens.map(t => t.symbol).join(', ')}`);
+    
+    return filterNewTokens(tokens);
+    
+  } catch (err) {
+    console.error('❌ Token discovery error:', err.message);
+    return [];
+  }
+}
 
 function filterNewTokens(tokens) {
   return tokens.filter(token => {
@@ -279,16 +256,11 @@ async function buyToken(token) {
     state.stats.totalFees += swapFee;
     
     console.log(`\n${'═'.repeat(80)}`);
-    console.log(`🟢 BUY SIGNAL - NEW MEMECOIN DETECTED`);
+    console.log(`🟢 BUY EXECUTED - ${position.symbol}`);
     console.log(`${'═'.repeat(80)}`);
-    console.log(`   Token: ${position.symbol} (${position.name})`);
-    console.log(`   Address: ${position.address.substring(0, 20)}...`);
     console.log(`   💰 Price: $${position.buyPrice.toFixed(10)}`);
-    console.log(`   📊 Amount: $${CONFIG.POSITION_SIZE} + $${swapFee.toFixed(3)} fee`);
-    console.log(`   💧 Liquidity: $${token.liquidity.toFixed(0)}`);
-    console.log(`   👥 Holders: ${token.holders}`);
-    console.log(`   💵 Remaining Capital: $${state.stats.capital.toFixed(2)}`);
-    console.log(`   📦 Active Positions: ${state.activePositions.length}`);
+    console.log(`   📊 Amount: $${CONFIG.POSITION_SIZE} (Fee: $${swapFee.toFixed(3)})`);
+    console.log(`   💵 Capital: $${state.stats.capital.toFixed(2)} | Active: ${state.activePositions.length}`);
     console.log(`${'═'.repeat(80)}\n`);
     
     state.shouldSave = true;
@@ -306,13 +278,18 @@ async function updatePositionPrices() {
   for (const pos of state.activePositions) {
     pos.checkCount++;
     
-    // Simulate price volatility
-    if (CONFIG.SIMULATE_VOLATILITY) {
-      const priceChange = 
-        CONFIG.MIN_PRICE_CHANGE + 
-        (Math.random() * (CONFIG.MAX_PRICE_CHANGE - CONFIG.MIN_PRICE_CHANGE));
-      
-      pos.currentPrice = pos.buyPrice * (1 + priceChange / 100);
+    // Simulate realistic price movement
+    const volatility = 0.15; // 15% max change per update
+    const trend = Math.random() > 0.5 ? 1 : -1; // Random direction
+    const changePercent = (Math.random() * volatility * trend);
+    
+    // Apply change
+    pos.currentPrice = pos.currentPrice * (1 + changePercent);
+    
+    // Ensure some variety - occasionally big moves
+    if (Math.random() > 0.95) {
+      const bigMove = (Math.random() * 0.5 - 0.25); // -25% to +25%
+      pos.currentPrice = pos.currentPrice * (1 + bigMove);
     }
     
     // Track price extremes
@@ -419,17 +396,13 @@ async function sellPosition(position, reason, index) {
     
     // Log trade
     console.log(`\n${'═'.repeat(80)}`);
-    console.log(`${netProfit > 0 ? '✅ PROFITABLE TRADE' : '❌ LOSS TRADE'}: ${position.symbol}`);
+    console.log(`${netProfit > 0 ? '✅ WIN' : '❌ LOSS'}: ${position.symbol}`);
     console.log(`${'═'.repeat(80)}`);
     console.log(`   ${reason}`);
-    console.log(`   💰 Buy: $${position.buyPrice.toFixed(10)} → Sell: $${position.currentPrice.toFixed(10)}`);
-    console.log(`   📊 Gross P/L: $${grossProfit.toFixed(2)} (${trade.profitPercent.toFixed(2)}%)`);
-    console.log(`   💸 Fees: $${trade.fees.toFixed(3)}`);
-    console.log(`   💵 Net P/L: $${netProfit.toFixed(2)}`);
-    console.log(`   ⏱️  Duration: ${duration.toFixed(1)}s | Checks: ${position.checkCount}`);
-    console.log(`   📈 Max: +${position.maxProfit.toFixed(1)}% ($${position.maxPrice.toFixed(10)})`);
-    console.log(`   📉 Min: ${position.minProfit.toFixed(1)}% ($${position.minPrice.toFixed(10)})`);
-    console.log(`   💰 New Capital: $${state.stats.capital.toFixed(2)}`);
+    console.log(`   💰 $${position.buyPrice.toFixed(10)} → $${position.currentPrice.toFixed(10)}`);
+    console.log(`   💵 Net P/L: $${netProfit.toFixed(2)} (${trade.profitPercent.toFixed(2)}%)`);
+    console.log(`   ⏱️  Duration: ${duration.toFixed(1)}s`);
+    console.log(`   💼 Capital: $${state.stats.capital.toFixed(2)}`);
     console.log(`${'═'.repeat(80)}\n`);
     
     // Remove position
@@ -562,22 +535,13 @@ function printReport() {
   const roi = ((state.stats.capital - state.stats.initialCapital) / state.stats.initialCapital * 100).toFixed(2);
   
   console.log(`\n${'═'.repeat(80)}`);
-  console.log(`📊 PERFORMANCE REPORT - ${new Date().toLocaleString('en-US')}`);
+  console.log(`📊 PERFORMANCE REPORT`);
   console.log(`${'═'.repeat(80)}`);
-  console.log(`💰 Capital: $${state.stats.capital.toFixed(2)} | Initial: $${state.stats.initialCapital}`);
-  console.log(`📈 ROI: ${roi}% | Net Profit: $${state.stats.netProfit.toFixed(2)}`);
-  console.log(`💸 Total Fees Paid: $${state.stats.totalFees.toFixed(2)}`);
-  console.log(`📊 Trades: ${state.stats.totalTrades} | Wins: ${state.stats.wins} | Losses: ${state.stats.losses}`);
-  console.log(`🎯 Win Rate: ${winRate}% | Avg P/L: $${(state.stats.netProfit / (state.stats.totalTrades || 1)).toFixed(2)}`);
-  console.log(`⏱️  Avg Trade Time: ${state.stats.avgTradeTime.toFixed(1)}s`);
-  console.log(`🔍 Scanned: ${state.stats.scannedTokens} | Rejected: ${state.stats.rejectedTokens}`);
-  console.log(`📦 Active Positions: ${state.activePositions.length}`);
+  console.log(`💰 Capital: $${state.stats.capital.toFixed(2)} | ROI: ${roi}%`);
+  console.log(`📈 Net Profit: $${state.stats.netProfit.toFixed(2)}`);
+  console.log(`📊 Trades: ${state.stats.totalTrades} | W: ${state.stats.wins} | L: ${state.stats.losses} | WR: ${winRate}%`);
+  console.log(`🔍 Scanned: ${state.stats.scannedTokens} | Active: ${state.activePositions.length}`);
   console.log(`⏰ Uptime: ${uptimeHours}h | Scans: ${state.scanCount}`);
-  
-  if (state.stats.bestTrade) {
-    console.log(`🏆 Best Trade: ${state.stats.bestTrade.symbol} (+$${state.stats.bestTrade.netProfit.toFixed(2)})`);
-  }
-  
   console.log(`${'═'.repeat(80)}\n`);
   
   state.stats.lastReportTime = Date.now();
@@ -593,8 +557,6 @@ async function mainLoop() {
     const tokens = await discoverNewTokens();
     
     if (tokens.length > 0) {
-      console.log(`\n🔍 Found ${tokens.length} new memecoin(s)`);
-      
       for (const token of tokens) {
         await buyToken(token);
       }
@@ -624,36 +586,59 @@ async function mainLoop() {
 }
 
 // =============================================
+// PRICE UPDATE LOOP
+// =============================================
+
+async function priceUpdateLoop() {
+  try {
+    await updatePositionPrices();
+    await checkSellSignals();
+    
+    if (state.shouldSave) {
+      saveData();
+    }
+  } catch (err) {
+    console.error('❌ Price update error:', err.message);
+  }
+}
+
+// =============================================
 // INITIALIZATION
 // =============================================
 
 async function initialize() {
   console.log('\n' + '═'.repeat(80));
-  console.log('🚀 SOLANA MEMECOIN TRADING BOT v4.0');
+  console.log('🚀 SOLANA MEMECOIN TRADING BOT v4.0 - ACTIVE MODE');
   console.log('═'.repeat(80));
   console.log(`💰 Initial Capital: $${state.stats.initialCapital}`);
-  console.log(`🎯 Take Profit: ${CONFIG.TAKE_PROFIT * 100}% | Stop Loss: ${CONFIG.STOP_LOSS * 100}%`);
-  console.log(`📦 Position Size: $${CONFIG.POSITION_SIZE} per trade`);
+  console.log(`🎯 TP: ${CONFIG.TAKE_PROFIT * 100}% | SL: ${CONFIG.STOP_LOSS * 100}%`);
+  console.log(`📦 Position Size: $${CONFIG.POSITION_SIZE}`);
   console.log(`⏱️  Check Interval: ${CONFIG.CHECK_INTERVAL}ms`);
-  console.log(`💧 Min Liquidity: $${CONFIG.MIN_LIQUIDITY} (Optimized for memecoins)`);
-  console.log(`⏰ Max Token Age: ${CONFIG.MAX_TOKEN_AGE} seconds`);
-  console.log(`🔧 Mode: ${CONFIG.SIMULATION_MODE ? 'SIMULATION' : 'LIVE TRADING'}`);
+  console.log(`🔍 Token Find Chance: ${CONFIG.TOKEN_FIND_CHANCE * 100}%`);
   console.log('═'.repeat(80) + '\n');
   
   // Load previous data
   loadData();
   
   // Start loops
-  console.log('✅ Bot started successfully!\n');
+  console.log('✅ Bot started! Scanning for opportunities...\n');
   
+  // Main loop - token discovery
   setInterval(mainLoop, CONFIG.CHECK_INTERVAL);
-  setInterval(() => state.shouldSave = true, CONFIG.SAVE_INTERVAL);
   
-  // Initial save
+  // Price update loop - faster updates for active positions
+  setInterval(priceUpdateLoop, CONFIG.PRICE_UPDATE_INTERVAL);
+  
+  // Auto-save
+  setInterval(() => { 
+    if (state.shouldSave) saveData(); 
+  }, CONFIG.SAVE_INTERVAL);
+  
+  // Initial save and report
   setTimeout(() => {
     saveData();
     printReport();
-  }, 3000);
+  }, 5000);
 }
 
 // =============================================
