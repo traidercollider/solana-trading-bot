@@ -1,0 +1,19 @@
+{
+  "trades": [],
+  "activePositions": [],
+  "stats": {
+    "totalTrades": 0,
+    "wins": 0,
+    "losses": 0,
+    "totalProfit": 0,
+    "capital": 270,
+    "startTime": 1700000000000,
+    "scannedTokens": 0,
+    "lastSaveTime": 1700000000000,
+    "lastReportTime": 1700000000000
+  },
+  "lastUpdate": "2024-11-23T12:00:00.000Z",
+  "simulatedData": {
+    "hourly": []
+  }
+}
